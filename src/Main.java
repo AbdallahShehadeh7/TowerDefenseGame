@@ -4,11 +4,9 @@ import java.awt.event.*;
 import java.util.ArrayList;
 
 public class Main extends JPanel implements ActionListener, MouseListener {
-    static final int TILE = 50;
-    static final int COLS = 16;
-    static final int ROWS = 10;
-    static final int WIDTH = COLS * TILE;
-    static final int HEIGHT = ROWS * TILE;
+    static final int TILE = 50, COLS = 16, ROWS = 10;
+    static final int WIDTH = COLS * TILE, HEIGHT = ROWS * TILE;
+    static final int TOWER_COST = 60, SELL_AMOUNT = 35;
 
     Timer timer = new Timer(16, this);
 
@@ -17,13 +15,9 @@ public class Main extends JPanel implements ActionListener, MouseListener {
     ArrayList<Tower> towers = new ArrayList<>();
     ArrayList<Bullet> bullets = new ArrayList<>();
 
-    int money = 120;
-    int lives = 10;
-    int wave = 0;
-    int enemiesLeftToSpawn = 0;
-    int spawnTimer = 0;
-    boolean waveRunning = false;
-    boolean gameOver = false;
+    int money = 110, lives = 8, wave = 0;
+    int enemiesLeftToSpawn = 0, spawnTimer = 0;
+    boolean waveRunning = false, gameOver = false;
 
     JButton startButton = new JButton("Start Wave");
     JButton resetButton = new JButton("Reset");
@@ -38,6 +32,7 @@ public class Main extends JPanel implements ActionListener, MouseListener {
         frame.add(game, BorderLayout.CENTER);
 
         JPanel bottom = new JPanel();
+        bottom.setBackground(new Color(232, 236, 230));
         bottom.add(game.status);
         bottom.add(game.startButton);
         bottom.add(game.resetButton);
@@ -51,7 +46,6 @@ public class Main extends JPanel implements ActionListener, MouseListener {
     public Main() {
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
         addMouseListener(this);
-
         makePath();
 
         startButton.addActionListener(e -> startWave());
@@ -74,8 +68,8 @@ public class Main extends JPanel implements ActionListener, MouseListener {
     }
 
     void resetGame() {
-        money = 120;
-        lives = 10;
+        money = 110;
+        lives = 8;
         wave = 0;
         enemiesLeftToSpawn = 0;
         spawnTimer = 0;
@@ -95,14 +89,16 @@ public class Main extends JPanel implements ActionListener, MouseListener {
         if (waveRunning || gameOver) return;
 
         wave++;
-        enemiesLeftToSpawn = 6 + wave * 3;
+        enemiesLeftToSpawn = 8 + wave * 4;
         spawnTimer = 0;
         waveRunning = true;
         startButton.setEnabled(false);
     }
 
     void updateStatus() {
-        String text = "Money: $" + money + "   Lives: " + lives + "   Wave: " + wave + "   Tower Cost: $50";
+        String text = "Money: $" + money + "   Lives: " + lives + "   Wave: " + wave
+                + "   Tower: $" + TOWER_COST + "   Sell: $" + SELL_AMOUNT
+                + "   Left click = build   Right click = sell";
         if (gameOver) text += "   GAME OVER";
         status.setText(text);
     }
@@ -129,9 +125,9 @@ public class Main extends JPanel implements ActionListener, MouseListener {
             return;
         }
 
-        enemies.add(new Enemy(path, 60 + wave * 15, 1.0 + wave * 0.08));
+        enemies.add(new Enemy(path, 75 + wave * 28, 1.15 + wave * 0.12));
         enemiesLeftToSpawn--;
-        spawnTimer = 45;
+        spawnTimer = Math.max(20, 42 - wave * 2);
     }
 
     void updateEnemies() {
@@ -149,7 +145,7 @@ public class Main extends JPanel implements ActionListener, MouseListener {
                     startButton.setEnabled(false);
                 }
             } else if (enemy.health <= 0) {
-                money += 15;
+                money += 12;
                 enemies.remove(i);
             }
         }
@@ -169,7 +165,7 @@ public class Main extends JPanel implements ActionListener, MouseListener {
 
             if (target != null && tower.cooldown <= 0) {
                 bullets.add(new Bullet(tower.x, tower.y, target));
-                tower.cooldown = 35;
+                tower.cooldown = 38;
             }
         }
     }
@@ -182,7 +178,7 @@ public class Main extends JPanel implements ActionListener, MouseListener {
             if (bullet.target.health <= 0 || bullet.target.reachedEnd) {
                 bullets.remove(i);
             } else if (bullet.hitTarget()) {
-                bullet.target.health -= 25;
+                bullet.target.health -= 22;
                 bullets.remove(i);
             }
         }
@@ -191,7 +187,7 @@ public class Main extends JPanel implements ActionListener, MouseListener {
     void checkWaveFinished() {
         if (waveRunning && enemiesLeftToSpawn == 0 && enemies.isEmpty()) {
             waveRunning = false;
-            money += 35;
+            money += 25;
             startButton.setEnabled(true);
         }
     }
@@ -210,19 +206,37 @@ public class Main extends JPanel implements ActionListener, MouseListener {
         return false;
     }
 
+    void sellTower(int row, int col) {
+        for (int i = towers.size() - 1; i >= 0; i--) {
+            Tower tower = towers.get(i);
+            if (tower.x / TILE == col && tower.y / TILE == row) {
+                towers.remove(i);
+                money += SELL_AMOUNT;
+                return;
+            }
+        }
+    }
+
     @Override
     public void mousePressed(MouseEvent e) {
-        if (gameOver || money < 50) return;
+        if (gameOver) return;
 
         int col = e.getX() / TILE;
         int row = e.getY() / TILE;
 
         if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+
+        if (SwingUtilities.isRightMouseButton(e)) {
+            sellTower(row, col);
+            return;
+        }
+
+        if (money < TOWER_COST) return;
         if (isPathTile(row, col)) return;
         if (hasTower(row, col)) return;
 
         towers.add(new Tower(col * TILE + TILE / 2, row * TILE + TILE / 2));
-        money -= 50;
+        money -= TOWER_COST;
     }
 
     @Override public void mouseClicked(MouseEvent e) {}
@@ -234,48 +248,70 @@ public class Main extends JPanel implements ActionListener, MouseListener {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
+        Graphics2D g2 = (Graphics2D) g;
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
         for (int row = 0; row < ROWS; row++) {
             for (int col = 0; col < COLS; col++) {
-                if (isPathTile(row, col)) g.setColor(new Color(180, 145, 85));
-                else g.setColor(new Color(75, 155, 75));
+                if (isPathTile(row, col)) g.setColor(new Color(174, 132, 72));
+                else if ((row + col) % 2 == 0) g.setColor(new Color(76, 154, 83));
+                else g.setColor(new Color(66, 139, 76));
 
                 g.fillRect(col * TILE, row * TILE, TILE, TILE);
-                g.setColor(new Color(40, 80, 40));
+                g.setColor(new Color(255, 255, 255, 28));
                 g.drawRect(col * TILE, row * TILE, TILE, TILE);
             }
         }
 
+        g.setColor(new Color(104, 72, 35));
+        for (Point p : path) {
+            g.drawRect(p.x - TILE / 2 + 4, p.y - TILE / 2 + 4, TILE - 8, TILE - 8);
+        }
+
         for (Tower tower : towers) {
-            g.setColor(new Color(40, 90, 180, 45));
+            g.setColor(new Color(38, 88, 175, 35));
             g.fillOval(tower.x - tower.range, tower.y - tower.range, tower.range * 2, tower.range * 2);
 
-            g.setColor(new Color(30, 80, 180));
-            g.fillOval(tower.x - 17, tower.y - 17, 34, 34);
+            g.setColor(new Color(22, 44, 84));
+            g.fillOval(tower.x - 20, tower.y - 20, 40, 40);
 
-            g.setColor(Color.BLACK);
-            g.fillRect(tower.x - 5, tower.y - 24, 10, 24);
+            g.setColor(new Color(55, 126, 220));
+            g.fillOval(tower.x - 15, tower.y - 15, 30, 30);
+
+            g.setColor(new Color(8, 20, 38));
+            g.fillRoundRect(tower.x - 6, tower.y - 30, 12, 28, 6, 6);
         }
 
         for (Enemy enemy : enemies) {
-            g.setColor(new Color(190, 45, 45));
-            g.fillOval((int) enemy.x - 16, (int) enemy.y - 16, 32, 32);
+            g.setColor(new Color(105, 20, 20));
+            g.fillOval((int) enemy.x - 18, (int) enemy.y - 18, 36, 36);
+
+            g.setColor(new Color(218, 58, 58));
+            g.fillOval((int) enemy.x - 14, (int) enemy.y - 14, 28, 28);
 
             g.setColor(Color.BLACK);
             g.drawOval((int) enemy.x - 16, (int) enemy.y - 16, 32, 32);
 
+            g.setColor(new Color(40, 40, 40));
+            g.fillRect((int) enemy.x - 17, (int) enemy.y - 27, 34, 7);
+
             g.setColor(Color.GREEN);
             int healthBar = Math.max(0, enemy.health * 30 / enemy.maxHealth);
-            g.fillRect((int) enemy.x - 15, (int) enemy.y - 25, healthBar, 5);
+            g.fillRect((int) enemy.x - 15, (int) enemy.y - 26, healthBar, 5);
         }
 
-        g.setColor(Color.YELLOW);
         for (Bullet bullet : bullets) {
+            g.setColor(new Color(255, 245, 120));
             g.fillOval((int) bullet.x - 5, (int) bullet.y - 5, 10, 10);
+
+            g.setColor(new Color(255, 170, 30));
+            g.drawOval((int) bullet.x - 5, (int) bullet.y - 5, 10, 10);
         }
 
         if (gameOver) {
             g.setColor(new Color(0, 0, 0, 160));
             g.fillRect(0, 0, WIDTH, HEIGHT);
+
             g.setColor(Color.WHITE);
             g.setFont(new Font("Arial", Font.BOLD, 45));
             g.drawString("GAME OVER", 260, 250);
